@@ -59,7 +59,8 @@ def start_upstream(udp_url, upstream_url):
     return subprocess.Popen([
         "ffmpeg",
         "-hide_banner", "-loglevel", "warning",
-        "-re",
+        "-fflags", "+genpts+discardcorrupt+nobuffer",
+        "-err_detect", "ignore_err",
         "-i", udp_url,
         "-vcodec", "copy", "-an",
         "-f", "flv",
@@ -78,9 +79,11 @@ def start_camera(camera_url, udp_dest, bitrate):
         "-preset", "ultrafast",
         "-vcodec", "libx264",
         "-tune", "zerolatency",
+        "-g", "50",
         "-an",
         "-b:v", bitrate,
         "-f", "mpegts",
+        "-flush_packets", "1",
         udp_dest,
     ])
 
