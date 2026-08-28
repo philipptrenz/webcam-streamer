@@ -58,7 +58,7 @@ def start_upstream(udp_url, upstream_url):
     """Permanent ffmpeg: reads UDP on localhost, pushes to RTMP."""
     return subprocess.Popen([
         "ffmpeg",
-        "-hide_banner", "-loglevel", "warning",
+        "-hide_banner", "-loglevel", "error",
         "-fflags", "+genpts+discardcorrupt+nobuffer",
         "-err_detect", "ignore_err",
         "-i", udp_url,
