@@ -1,0 +1,32 @@
+cameras:
+  cam1:
+    name: Front door
+    url: rtsp://192.168.1.10:7447/stream1
+  cam2:
+    name: Backyard
+    url: rtsp://192.168.1.11:7447/stream2
+
+upstream:
+  url: rtmp://your-server.example.com/live/stream
+  # For restreamer, you may need to set the UPSTREAM_TOKEN environment variable.
+
+# UDP relay on localhost so the RTMP upstream connection stays alive across camera switches.
+# Cameras re-encode to mpegts and send to dest; upstream reads from listen.
+udp:
+  dest: udp://127.0.0.1:1234
+  listen: "udp://@127.0.0.1:1234?overrun_nonfatal=1&fifo_size=50000000"
+  bitrate: 600k
+
+# Evaluated top-to-bottom, first match wins. Last entry is the fallback.
+schedules:
+  - name: Daytime
+    days: [mon, tue, wed, thu, fri]
+    start: "08:00"
+    end: "18:00"
+    timezone: Europe/Berlin
+    cameras: [cam1, cam2]
+    interval: 15
+
+  - name: Fallback
+    cameras: [cam1]
+    interval: 30

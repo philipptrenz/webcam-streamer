@@ -1,0 +1,10 @@
+services:
+  switcher:
+    build: .
+    restart: unless-stopped
+    # host networking to reach cameras on the local network
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./config.yml:/config.yml:ro
+      - ./switcher.py:/app/switcher.py:ro
