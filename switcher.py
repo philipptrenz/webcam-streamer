@@ -124,6 +124,22 @@ def main():
     cam_index = 0
     prev_schedule = None
     current_cam_id = None
+    # Per-camera failure tracking: cam_id -> (fail_count, next_retry_time)
+    cam_failures = {}
+
+    def record_failure(cid):
+        count = cam_failures.get(cid, (0, 0))[0] + 1
+        backoff = min(2 ** count, 300)
+        cam_failures[cid] = (count, time.monotonic() + backoff)
+        return count, backoff
+
+    def is_available(cid):
+        if cid not in cam_failures:
+            return True
+        return time.monotonic() >= cam_failures[cid][1]
+
+    def clear_failure(cid):
+        cam_failures.pop(cid, None)
 
     while True:
         # (Re)start upstream if it died
@@ -137,6 +153,11 @@ def main():
         cam_ids = schedule["cameras"]
         interval = schedule.get("interval", 15)
 
+        if not cam_ids:
+            print("[switcher] no cameras in schedule, waiting 10s", flush=True)
+            time.sleep(10)
+            continue
+
         if schedule.get("name") != prev_schedule:
             print(f"[switcher] schedule: {schedule.get('name', 'default')}, "
                   f"cameras: {cam_ids}, interval: {interval}s", flush=True)
@@ -144,23 +165,52 @@ def main():
             cam_index = 0
             current_cam_id = None
 
+        # Pick the next available camera, skipping ones still in backoff
         cam_index %= len(cam_ids)
-        cam_id = cam_ids[cam_index]
-        cam = cameras[cam_id]
+        cam_id = None
+        for i in range(len(cam_ids)):
+            candidate = cam_ids[(cam_index + i) % len(cam_ids)]
+            if candidate not in cameras:
+                print(f"[switcher] unknown camera '{candidate}', skipping", flush=True)
+                record_failure(candidate)
+                continue
+            if is_available(candidate):
+                cam_id = candidate
+                cam_index = (cam_index + i) % len(cam_ids)
+                break
 
-        # Skip restart if same camera and ffmpeg still running
-        if cam_id == current_cam_id and cam_proc and cam_proc.poll() is None:
-            time.sleep(interval)
+        if cam_id is None:
+            # All cameras in backoff — wait for the soonest one
+            retry_times = [cam_failures[c][1] for c in cam_ids if c in cam_failures]
+            if retry_times:
+                wait = max(min(retry_times) - time.monotonic(), 1)
+            else:
+                wait = 5
+            print(f"[switcher] all cameras unavailable, waiting {wait:.0f}s", flush=True)
+            time.sleep(wait)
             continue
 
-        # Restart if same camera but ffmpeg died
+        cam = cameras[cam_id]
+
+        # Same camera still running — poll frequently so we notice if it dies
+        if cam_id == current_cam_id and cam_proc and cam_proc.poll() is None:
+            elapsed = 0
+            while elapsed < interval:
+                if cam_proc.poll() is not None:
+                    break
+                time.sleep(1)
+                elapsed += 1
+            continue
+
+        # Same camera but ffmpeg died
         if cam_id == current_cam_id and cam_proc and cam_proc.poll() is not None:
-            print(f"[camera] ffmpeg died (code {cam_proc.returncode}), restarting", flush=True)
+            count, backoff = record_failure(cam_id)
+            print(f"[camera] {cam_id} died (code {cam_proc.returncode}), backoff {backoff}s (attempt {count})", flush=True)
             cam_proc = None
-            time.sleep(2)
+            current_cam_id = None
+            continue
 
         stop_ffmpeg(cam_proc)
-        # print(f"[camera] -> {cam_id} ({cam.get('name', '')})", flush=True)
         cam_proc = start_camera(cam["url"], udp_dest, bitrate)
         current_cam_id = cam_id
 
@@ -168,13 +218,15 @@ def main():
         elapsed = 0
         while elapsed < interval:
             if cam_proc.poll() is not None:
-                print(f"[camera] ffmpeg exited early (code {cam_proc.returncode}), skipping", flush=True)
+                count, backoff = record_failure(cam_id)
+                print(f"[camera] {cam_id} exited early (code {cam_proc.returncode}), backoff {backoff}s (attempt {count})", flush=True)
                 cam_proc = None
                 current_cam_id = None
-                time.sleep(2)
                 break
             time.sleep(1)
             elapsed += 1
+        else:
+            clear_failure(cam_id)
 
 
 if __name__ == "__main__":
