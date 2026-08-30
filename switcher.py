@@ -69,13 +69,15 @@ def start_upstream(udp_url, upstream_url):
     ])
 
 
-def start_camera(camera_url, udp_dest, bitrate):
+def start_camera(camera_url, udp_dest, bitrate, resolution):
     """Per-camera ffmpeg: RTSP → re-encode → UDP localhost."""
+    w, h = resolution.split("x")
     return subprocess.Popen([
         "ffmpeg",
-        "-hide_banner", "-loglevel", "warning",
+        "-hide_banner", "-loglevel", "error",
         "-rtsp_transport", "tcp",
         "-i", camera_url,
+        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}",
         "-preset", "ultrafast",
         "-vcodec", "libx264",
         "-tune", "zerolatency",
@@ -109,6 +111,7 @@ def main():
     udp_dest = udp_cfg.get("dest", "udp://127.0.0.1:1234")
     udp_listen = udp_cfg.get("listen", "udp://@127.0.0.1:1234?overrun_nonfatal=1&fifo_size=50000000")
     bitrate = udp_cfg.get("bitrate", "600k")
+    resolution = udp_cfg.get("resolution", "1280x720")
 
     cam_proc = None
     upstream_proc = None
@@ -211,7 +214,7 @@ def main():
             continue
 
         stop_ffmpeg(cam_proc)
-        cam_proc = start_camera(cam["url"], udp_dest, bitrate)
+        cam_proc = start_camera(cam["url"], udp_dest, bitrate, resolution)
         current_cam_id = cam_id
 
         cam_index += 1

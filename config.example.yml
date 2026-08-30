@@ -16,6 +16,7 @@ udp:
   dest: udp://127.0.0.1:1234
   listen: "udp://@127.0.0.1:1234?overrun_nonfatal=1&fifo_size=50000000"
   bitrate: 600k
+  resolution: 1280x720
 
 # Evaluated top-to-bottom, first match wins. Last entry is the fallback.
 schedules:

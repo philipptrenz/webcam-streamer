@@ -17,6 +17,7 @@ When the switcher rotates to the next camera, only the camera-side ffmpeg is res
 - **Schedule-based rotation** – configure different camera sets and intervals per schedule (e.g. working hours vs. off hours)
 - **Day and time filters** – restrict schedules to specific weekdays and time windows with timezone support
 - **Drop-free RTMP streaming** – UDP relay on localhost keeps the upstream connection alive across camera switches
+- **Resolution normalization** – all camera feeds are scaled and cropped to a uniform resolution (default `1280x720`), preventing mid-stream resolution changes that break RTMP receivers
 - **Auto-restart** – both camera and upstream ffmpeg processes are monitored and restarted if they crash
 - **Token authentication** – optional `UPSTREAM_TOKEN` env var appended to the RTMP URL
 - **Docker-ready** – ships with a Dockerfile and docker-compose.yml using host networking
@@ -45,6 +46,7 @@ udp:
   dest: udp://127.0.0.1:1234
   listen: "udp://@127.0.0.1:1234?overrun_nonfatal=1&fifo_size=50000000"
   bitrate: 600k
+  resolution: 1280x720
 
 schedules:
   - name: Daytime
